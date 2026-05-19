@@ -1,0 +1,18 @@
+# Development tools (MCP server helpers)
+context7-mcp.sh
+superpowers-mcp.sh
+
+# MCP server repos (cloned for local dev)
+superpowers-mcp/
+superpowers-skills/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
