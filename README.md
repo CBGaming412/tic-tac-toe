@@ -75,8 +75,11 @@ The game includes an in-app **"📚 View Evidence Base"** button that displays a
 
 ### Gameplay
 - **🤖 AI Opponent** — Minimax with alpha-beta pruning across 4 difficulty levels
-- **👥 Local Multiplayer** — Play vs a friend on the same device
-- **📊 Persistent Scoreboard** — Tracks X wins, O wins, and Draws across games
+- **🎯 First-Move Choice** — Choose whether you or the AI moves first (AI mode)
+- **👥 Local Multiplayer** — Play vs a friend on the same device with optional custom player names
+- **📊 Persistent Scoreboard** — Scores survive page refreshes via `localStorage`
+- **↩️ Undo Move** — Take back your last move (in AI mode, undoes both your move and the AI's response)
+- **🔄 Reset Scores** — Clear all scores with a confirmation prompt
 
 ### Design & UX
 - **🎨 Research-Driven UI** — Every color, size, spacing, and animation backed by evidence
@@ -132,6 +135,14 @@ The AI evaluates every possible future game state to find the mathematically opt
 
 **Nash Equilibrium [E15]:** With perfect play from both sides, Tic Tac Toe always ends in a draw. The Impossible AI demonstrates this — you can verify it yourself, or check the self-test suite which proves it programmatically.
 
+### First-Move Control
+
+Choose who goes first in AI mode:
+- **You (X)** — You play as X and make the opening move
+- **AI (X)** — The AI plays as X and moves first automatically
+
+The AI adapts its minimax strategy regardless of which symbol it plays.
+
 ### AI Move Preferences
 
 The scoring function includes **depth-awareness:**
@@ -142,6 +153,17 @@ Slower losses score higher:  Lose in 5 moves (-5) > Lose in 2 moves (-8)
 ```
 
 This means the AI won't just win — it wins as fast as possible and delays losses as long as possible.
+
+---
+
+## 👥 Versus Player Mode
+
+Play against a friend on the same device with these extras:
+
+- **Custom Player Names** — Optional name fields for each player (e.g., "Alice" and "Bob")
+- **Personalized UI** — Names appear in the status bar ("Alice's turn") and scoreboard ("Alice (X) Wins")
+- **Ephemeral Names** — Names reset on page refresh or when switching to AI mode, keeping the scoreboard persistent
+- **Single-Step Undo** — Undo just the last move (both players' moves in AI mode)
 
 ---
 
@@ -187,7 +209,7 @@ Every design decision traces to published research. Citations are categorized by
 | ID | Citation | Year | What It Informed |
 |----|----------|------|------------------|
 | **E6** | W3C. "Web Content Accessibility Guidelines (WCAG) 2.1." Level AA. | 2018 | Contrast ≥ 4.5:1, keyboard navigation, ARIA roles, `prefers-reduced-motion` |
-| **E10** | Nielsen, J. "Progressive Disclosure." *Nielsen Norman Group.* | 2006 | Complexity management: AI difficulty selector hidden in PvP mode |
+| **E10** | Nielsen, J. "Progressive Disclosure." *Nielsen Norman Group.* | 2006 | Complexity management: AI difficulty and first-move selectors hidden in PvP mode |
 
 ---
 
