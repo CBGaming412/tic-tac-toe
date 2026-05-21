@@ -607,6 +607,13 @@ h1 {
         <option value="impossible">Impossible</option>
       </select>
     </div>
+    <div class="control-group" id="first-move-group">
+      <label for="first-move-select">First</label>
+      <select id="first-move-select" aria-label="Who moves first">
+        <option value="you">You (X)</option>
+        <option value="ai">AI (X)</option>
+      </select>
+    </div>
     <div class="control-group">
       <button id="undo-btn" aria-label="Undo last move" disabled>↩ Undo</button>
     </div>
@@ -792,24 +799,23 @@ function makeMove(state, index) {
 // ─── 2. AI ENGINE ──────────────────────────────────────────────
 // [E1] Minimax with [E2] Alpha-Beta Pruning
 
-function evaluate(board) {
+function evaluate(board, aiSym = O) {
   const result = checkWinner(board);
-  if (result) return result.winner === O ? 10 : -10;
+  if (result) return result.winner === aiSym ? 10 : -10;
   return 0;
 }
 
-function minimax(board, depth, isMaximizing, alpha, beta) {
-  const score = evaluate(board);
-  if (score === 10) return score - depth;   // prefer faster wins
-  if (score === -10) return score + depth;  // prefer slower losses
+function minimax(board, depth, isMaximizing, alpha, beta, aiSym = O) {
+  const score = evaluate(board, aiSym);
+  if (score !== 0) return score + (score > 0 ? -depth : depth);
   if (isDraw(board)) return 0;
 
   if (isMaximizing) {
     let best = -Infinity;
     for (let i = 0; i < 9; i++) {
       if (board[i] === EMPTY) {
-        board[i] = O;
-        best = Math.max(best, minimax(board, depth + 1, false, alpha, beta));
+        board[i] = aiSym;
+        best = Math.max(best, minimax(board, depth + 1, false, alpha, beta, aiSym));
         board[i] = EMPTY;
         alpha = Math.max(alpha, best);
         if (beta <= alpha) break; // [E2] Alpha-beta prune
@@ -820,8 +826,8 @@ function minimax(board, depth, isMaximizing, alpha, beta) {
     let best = Infinity;
     for (let i = 0; i < 9; i++) {
       if (board[i] === EMPTY) {
-        board[i] = X;
-        best = Math.min(best, minimax(board, depth + 1, true, alpha, beta));
+        board[i] = aiSym === X ? O : X;
+        best = Math.min(best, minimax(board, depth + 1, true, alpha, beta, aiSym));
         board[i] = EMPTY;
         beta = Math.min(beta, best);
         if (beta <= alpha) break; // [E2] Alpha-beta prune
@@ -831,14 +837,14 @@ function minimax(board, depth, isMaximizing, alpha, beta) {
   }
 }
 
-function getBestMove(board) {
+function getBestMove(board, aiSym = O) {
   let bestScore = -Infinity;
   let bestMove = -1;
   
   for (let i = 0; i < 9; i++) {
     if (board[i] === EMPTY) {
-      board[i] = O;
-      const score = minimax(board, 0, false, -Infinity, Infinity);
+      board[i] = aiSym;
+      const score = minimax(board, 0, false, -Infinity, Infinity, aiSym);
       board[i] = EMPTY;
       if (score > bestScore) {
         bestScore = score;
@@ -849,15 +855,13 @@ function getBestMove(board) {
   return bestMove;
 }
 
-function getMediumMove(board) {
-  // 70% optimal, 30% random
-  if (Math.random() < 0.7) return getBestMove(board);
+function getMediumMove(board, aiSym = O) {
+  if (Math.random() < 0.7) return getBestMove(board, aiSym);
   return getRandomMove(board);
 }
 
-function getEasyMove(board) {
-  // 30% optimal, 70% random
-  if (Math.random() < 0.3) return getBestMove(board);
+function getEasyMove(board, aiSym = O) {
+  if (Math.random() < 0.3) return getBestMove(board, aiSym);
   return getRandomMove(board);
 }
 
@@ -869,16 +873,15 @@ function getRandomMove(board) {
   return available[Math.floor(Math.random() * available.length)];
 }
 
-function getAIMove(board, difficulty) {
+function getAIMove(board, difficulty, aiSym = O) {
   switch (difficulty) {
-    case 'easy': return getEasyMove(board);
-    case 'medium': return getMediumMove(board);
+    case 'easy': return getEasyMove(board, aiSym);
+    case 'medium': return getMediumMove(board, aiSym);
     case 'hard':
-      // 90% optimal
-      if (Math.random() < 0.9) return getBestMove(board);
+      if (Math.random() < 0.9) return getBestMove(board, aiSym);
       return getRandomMove(board);
-    case 'impossible': return getBestMove(board);
-    default: return getBestMove(board);
+    case 'impossible': return getBestMove(board, aiSym);
+    default: return getBestMove(board, aiSym);
   }
 }
 
@@ -891,7 +894,9 @@ const resetBtn = document.getElementById('reset-btn');
 const undoBtn = document.getElementById('undo-btn');
 const modeSelect = document.getElementById('mode-select');
 const diffSelect = document.getElementById('diff-select');
+const firstMoveSelect = document.getElementById('first-move-select');
 const diffGroup = document.getElementById('difficulty-group');
+const firstMoveGroup = document.getElementById('first-move-group');
 const evidenceBtn = document.getElementById('evidence-btn');
 const evidencePanel = document.getElementById('evidence-panel');
 const scoreEls = {
@@ -904,6 +909,8 @@ let gameState = createState();
 let scores = { x: 0, o: 0, draw: 0 };
 let aiThinking = false;
 let moveHistory = [];  // Stack for undo — stores { state, scores } snapshots
+let humanPlayer = X;   // Symbol assigned to the human
+let aiPlayer = O;      // Symbol assigned to the AI
 
 // ─── Score Persistence via localStorage ────────────────────────
 
@@ -917,7 +924,6 @@ function loadScores() {
       }
     }
   } catch (e) {
-    // localStorage unavailable or corrupt — start fresh
     scores = { x: 0, o: 0, draw: 0 };
   }
 }
@@ -926,9 +932,23 @@ function saveScores() {
   try {
     localStorage.setItem('ttt-scores', JSON.stringify(scores));
   } catch (e) {
-    // Silently fail if localStorage is unavailable
+    // Silently fail
   }
 }
+
+// ─── First-move control ────────────────────────────────────────
+
+function updateFirstMove() {
+  if (firstMoveSelect.value === 'you') {
+    humanPlayer = X;
+    aiPlayer = O;
+  } else {
+    humanPlayer = O;
+    aiPlayer = X;
+  }
+}
+
+// ─── Board Building & Rendering ────────────────────────────────
 
 function createXSvg(ghost = false) {
   const cls = ghost ? 'mark-x ghost-mark' : 'mark-x';
@@ -955,7 +975,6 @@ function buildBoard() {
     cell.setAttribute('aria-label', `Cell ${Math.floor(i/3)+1}, ${(i%3)+1}: empty`);
     cell.setAttribute('tabindex', '0');
     
-    // Ghost marks for hover preview
     cell.innerHTML = createXSvg(true) + createOSvg(true);
     
     cell.addEventListener('click', () => handleCellClick(i));
@@ -978,21 +997,17 @@ function renderBoard() {
     cell.classList.toggle('winner', isWinner);
     cell.classList.toggle('draw-cell', isDrawCell && !isWinner);
     
-    // Update aria
     const label = isTaken 
       ? `Cell ${Math.floor(i/3)+1}, ${(i%3)+1}: ${value}`
       : `Cell ${Math.floor(i/3)+1}, ${(i%3)+1}: empty`;
     cell.setAttribute('aria-label', label);
     
     if (isTaken) {
-      // Replace ghost marks with actual mark
       cell.innerHTML = value === X ? createXSvg() : createOSvg();
     } else {
-      // Show ghost of current player on hover
       cell.innerHTML = gameState.currentPlayer === X 
         ? createXSvg(true) + createOSvg(true) 
         : createOSvg(true) + createXSvg(true);
-      // Only show the current player's ghost
       const ghosts = cell.querySelectorAll('.ghost-mark');
       ghosts.forEach((g, gi) => {
         g.style.display = gi === 0 ? '' : 'none';
@@ -1003,7 +1018,7 @@ function renderBoard() {
 
 function renderStatus() {
   statusEl.classList.remove('x-turn', 'o-turn', 'win', 'draw', 'animate-in');
-  void statusEl.offsetWidth; // force reflow
+  void statusEl.offsetWidth;
   statusEl.classList.add('animate-in');
   
   if (gameState.winner) {
@@ -1012,7 +1027,7 @@ function renderStatus() {
     const mode = modeSelect.value;
     let winText;
     if (mode === 'ai') {
-      winText = gameState.winner === X ? 'You win! 🎉' : 'AI wins!';
+      winText = gameState.winner === humanPlayer ? 'You win! 🎉' : 'AI wins!';
     } else {
       winText = `${gameState.winner} wins! 🎉`;
     }
@@ -1021,13 +1036,14 @@ function renderStatus() {
     statusEl.classList.add('draw');
     statusEl.innerHTML = '🤝 Draw!';
   } else {
+    const isHumanTurn = gameState.currentPlayer === humanPlayer;
     const isXTurn = gameState.currentPlayer === X;
     statusEl.classList.add(isXTurn ? 'x-turn' : 'o-turn');
     const mode = modeSelect.value;
     const icon = isXTurn ? createXSvgInline('#3b82f6') : createOSvgInline('#ef4444');
     
     if (mode === 'ai') {
-      statusEl.innerHTML = isXTurn 
+      statusEl.innerHTML = isHumanTurn 
         ? icon + 'Your turn' 
         : icon + "AI's turn";
     } else {
@@ -1068,20 +1084,17 @@ function handleCellClick(index) {
   if (gameState.gameOver) return;
   if (gameState.board[index] !== EMPTY) return;
   
-  // In AI mode, only allow X (human) moves
   const mode = modeSelect.value;
-  if (mode === 'ai' && gameState.currentPlayer !== X) return;
+  if (mode === 'ai' && gameState.currentPlayer !== humanPlayer) return;
   
   applyMove(index);
   
-  // AI response
   if (mode === 'ai' && !gameState.gameOver) {
     scheduleAIMove();
   }
 }
 
 function handleKeyboard(e, index) {
-  // Arrow key navigation [E6]
   const row = Math.floor(index / 3);
   const col = index % 3;
   let target = -1;
@@ -1105,7 +1118,6 @@ function handleKeyboard(e, index) {
 }
 
 function applyMove(index) {
-  // Save snapshot for undo
   moveHistory.push({
     state: { ...gameState, board: [...gameState.board] },
     scores: { ...scores }
@@ -1119,7 +1131,6 @@ function applyMove(index) {
   renderStatus();
   updateUndoButton();
   
-  // [E9] Immediate visual feedback
   if (gameState.gameOver) {
     handleGameOver();
   }
@@ -1129,9 +1140,6 @@ function undoMove() {
   if (moveHistory.length === 0 || aiThinking) return;
   
   const mode = modeSelect.value;
-  
-  // In AI mode, undo both the AI's move and the player's move
-  // In PvP mode, undo just the last move
   const stepsToUndo = mode === 'ai' ? 2 : 1;
   
   let snapshot = null;
@@ -1154,12 +1162,11 @@ function scheduleAIMove() {
   updateUndoButton();
   thinkingEl.classList.add('visible');
   
-  // [E9] Slight delay for perceived "thinking" — feels more natural
   const delay = 300 + Math.random() * 400;
   
   setTimeout(() => {
     const difficulty = diffSelect.value;
-    const move = getAIMove([...gameState.board], difficulty);
+    const move = getAIMove([...gameState.board], difficulty, aiPlayer);
     
     thinkingEl.classList.remove('visible');
     aiThinking = false;
@@ -1177,12 +1184,11 @@ function handleGameOver() {
     scores[key]++;
     bumpScore(key);
     
-    // [E13] Von Restorff — highlight winning line
     boardEl.classList.add('shake');
     setTimeout(() => boardEl.classList.remove('shake'), 400);
     
-    // Confetti for wins
-    if (modeSelect.value !== 'ai' || gameState.winner === X) {
+    const mode = modeSelect.value;
+    if (mode !== 'ai' || gameState.winner === humanPlayer) {
       spawnConfetti();
     }
   } else if (gameState.isDraw) {
@@ -1190,20 +1196,25 @@ function handleGameOver() {
     bumpScore('draw');
   }
   
-  saveScores();  // Persist scores
+  saveScores();
   renderScores();
-  updateUndoButton();  // Disable undo on game over
+  updateUndoButton();
 }
 
 function resetGame() {
   gameState = createState();
-  moveHistory = [];  // Clear undo history on new game
+  moveHistory = [];
   buildBoard();
   renderBoard();
   renderStatus();
   thinkingEl.classList.remove('visible');
   aiThinking = false;
   updateUndoButton();
+  
+  // If AI mode and AI goes first (plays as X), schedule the first move
+  if (modeSelect.value === 'ai' && aiPlayer === X && !gameState.gameOver) {
+    scheduleAIMove();
+  }
 }
 
 // ─── 5. ANIMATIONS ─────────────────────────────────────────────
@@ -1246,19 +1257,26 @@ function spawnConfetti() {
 
 // ─── 6. INITIALIZATION ────────────────────────────────────────
 
-// Controls
 resetBtn.addEventListener('click', resetGame);
 undoBtn.addEventListener('click', undoMove);
 
 modeSelect.addEventListener('change', () => {
-  // [E10] Progressive disclosure: hide difficulty in PvP
-  diffGroup.style.display = modeSelect.value === 'ai' ? '' : 'none';
+  const isAI = modeSelect.value === 'ai';
+  diffGroup.style.display = isAI ? '' : 'none';
+  firstMoveGroup.style.display = isAI ? '' : 'none';
+  updateFirstMove();
   resetGame();
 });
 
-diffSelect.addEventListener('change', resetGame);
+diffSelect.addEventListener('change', () => {
+  resetGame();
+});
 
-// Evidence panel toggle
+firstMoveSelect.addEventListener('change', () => {
+  updateFirstMove();
+  resetGame();
+});
+
 evidenceBtn.addEventListener('click', () => {
   const isOpen = evidencePanel.classList.toggle('open');
   evidenceBtn.setAttribute('aria-expanded', isOpen);
@@ -1269,6 +1287,7 @@ evidenceBtn.addEventListener('click', () => {
 
 // Boot
 loadScores();
+updateFirstMove();
 buildBoard();
 renderBoard();
 renderStatus();
@@ -1276,7 +1295,6 @@ renderScores();
 updateUndoButton();
 
 // ─── 7. SELF-TESTS (Console) ──────────────────────────────────
-// [Superpowers TDD verification: evidence that core logic is correct]
 (function runSelfTests() {
   const tests = [];
   let passed = 0;
@@ -1287,50 +1305,39 @@ updateUndoButton();
     else console.error(`❌ FAIL: ${name}`);
   }
   
-  // Test 1: Empty board has no winner
   assert(checkWinner(Array(9).fill(EMPTY)) === null, 'Empty board → no winner');
   
-  // Test 2: X wins top row
   const xWinsTop = [X,X,X, EMPTY,O,O, EMPTY,EMPTY,EMPTY];
   const r2 = checkWinner(xWinsTop);
   assert(r2 && r2.winner === X && JSON.stringify(r2.line) === '[0,1,2]', 'X wins top row');
   
-  // Test 3: O wins diagonal
   const oWinsDiag = [O,X,X, EMPTY,O,X, EMPTY,EMPTY,O];
   const r3 = checkWinner(oWinsDiag);
   assert(r3 && r3.winner === O && JSON.stringify(r3.line) === '[0,4,8]', 'O wins diagonal');
   
-  // Test 4: Draw detection
   const drawBoard = [X,O,X, X,O,O, O,X,X];
   assert(isDraw(drawBoard) && checkWinner(drawBoard) === null, 'Draw detected correctly');
   
-  // Test 5: makeMove returns new state
   const s0 = createState();
   const s1 = makeMove(s0, 4);
   assert(s1 && s1.board[4] === X && s1.currentPlayer === O, 'makeMove works correctly');
   
-  // Test 6: makeMove rejects taken cell
   assert(makeMove(s1, 4) === null, 'Cannot move to taken cell');
   
-  // Test 7: Minimax finds winning move for O
   const almostWinO = [X,X,EMPTY, O,O,EMPTY, X,EMPTY,EMPTY];
   const bestMove = getBestMove([...almostWinO]);
   assert(bestMove === 5, 'Minimax finds O winning move at index 5');
   
-  // Test 8: Minimax blocks X from winning
   const xAboutToWin = [X,X,EMPTY, O,O,EMPTY, EMPTY,EMPTY,EMPTY];
   const blockMove = getBestMove([...xAboutToWin]);
   assert(blockMove === 2 || blockMove === 5, 'Minimax blocks X win or takes own win');
   
-  // Test 9: [E15] Perfect play = draw (Nash equilibrium)
-  // Simulate: both players play optimally
   function simulatePerfectGame() {
     let board = Array(9).fill(EMPTY);
     let isX = true;
     for (let moves = 0; moves < 9; moves++) {
       let move;
       if (isX) {
-        // X plays optimally (minimize O's score)
         let bestScore = Infinity;
         let bestM = -1;
         for (let i = 0; i < 9; i++) {
@@ -1355,7 +1362,6 @@ updateUndoButton();
   const perfectResult = simulatePerfectGame();
   assert(perfectResult === 'draw', '[E15] Nash equilibrium: perfect play → draw');
   
-  // Test 10: All win lines detected
   let allLinesWork = true;
   for (const line of WIN_LINES) {
     const b = Array(9).fill(EMPTY);
@@ -1365,16 +1371,14 @@ updateUndoButton();
   }
   assert(allLinesWork, 'All 8 win lines detected correctly');
   
-  // Test 11: Game over state transitions
   const gs = createState();
-  const gs1 = makeMove(gs, 0);   // X
-  const gs2 = makeMove(gs1, 3);  // O
-  const gs3 = makeMove(gs2, 1);  // X
-  const gs4 = makeMove(gs3, 4);  // O
-  const gs5 = makeMove(gs4, 2);  // X wins top row
+  const gs1 = makeMove(gs, 0);
+  const gs2 = makeMove(gs1, 3);
+  const gs3 = makeMove(gs2, 1);
+  const gs4 = makeMove(gs3, 4);
+  const gs5 = makeMove(gs4, 2);
   assert(gs5.gameOver && gs5.winner === X, 'Game over state correct on win');
   
-  // Report
   console.log(`%c🧪 Self-Tests: ${passed}/${tests.length} passed`, 
     `color: ${passed === tests.length ? '#22c55e' : '#ef4444'}; font-weight: bold; font-size: 14px`);
   tests.forEach(t => {
