@@ -163,6 +163,16 @@ h1 {
   outline-offset: 1px;
 }
 
+.control-group button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.control-group button:disabled:hover {
+  border-color: var(--border-color);
+  background: var(--bg-primary);
+}
+
 /* ═══════════════════════════════════════
    STATUS BAR — [E12] Dual-coding (icon + text)
    ═══════════════════════════════════════ */
@@ -598,6 +608,9 @@ h1 {
       </select>
     </div>
     <div class="control-group">
+      <button id="undo-btn" aria-label="Undo last move" disabled>↩ Undo</button>
+    </div>
+    <div class="control-group">
       <button id="reset-btn" aria-label="Start new game">↻ New Game</button>
     </div>
   </div>
@@ -875,6 +888,7 @@ const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
 const thinkingEl = document.getElementById('thinking');
 const resetBtn = document.getElementById('reset-btn');
+const undoBtn = document.getElementById('undo-btn');
 const modeSelect = document.getElementById('mode-select');
 const diffSelect = document.getElementById('diff-select');
 const diffGroup = document.getElementById('difficulty-group');
@@ -889,6 +903,32 @@ const scoreEls = {
 let gameState = createState();
 let scores = { x: 0, o: 0, draw: 0 };
 let aiThinking = false;
+let moveHistory = [];  // Stack for undo — stores { state, scores } snapshots
+
+// ─── Score Persistence via localStorage ────────────────────────
+
+function loadScores() {
+  try {
+    const stored = localStorage.getItem('ttt-scores');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed.x === 'number' && typeof parsed.o === 'number' && typeof parsed.draw === 'number') {
+        scores = parsed;
+      }
+    }
+  } catch (e) {
+    // localStorage unavailable or corrupt — start fresh
+    scores = { x: 0, o: 0, draw: 0 };
+  }
+}
+
+function saveScores() {
+  try {
+    localStorage.setItem('ttt-scores', JSON.stringify(scores));
+  } catch (e) {
+    // Silently fail if localStorage is unavailable
+  }
+}
 
 function createXSvg(ghost = false) {
   const cls = ghost ? 'mark-x ghost-mark' : 'mark-x';
@@ -1016,6 +1056,11 @@ function bumpScore(type) {
   setTimeout(() => card.classList.remove('score-bump'), 300);
 }
 
+function updateUndoButton() {
+  const canUndo = moveHistory.length > 0 && !gameState.gameOver && !aiThinking;
+  undoBtn.disabled = !canUndo;
+}
+
 // ─── 4. EVENT SYSTEM ───────────────────────────────────────────
 
 function handleCellClick(index) {
@@ -1060,12 +1105,19 @@ function handleKeyboard(e, index) {
 }
 
 function applyMove(index) {
+  // Save snapshot for undo
+  moveHistory.push({
+    state: { ...gameState, board: [...gameState.board] },
+    scores: { ...scores }
+  });
+  
   const newState = makeMove(gameState, index);
   if (!newState) return;
   
   gameState = newState;
   renderBoard();
   renderStatus();
+  updateUndoButton();
   
   // [E9] Immediate visual feedback
   if (gameState.gameOver) {
@@ -1073,8 +1125,33 @@ function applyMove(index) {
   }
 }
 
+function undoMove() {
+  if (moveHistory.length === 0 || aiThinking) return;
+  
+  const mode = modeSelect.value;
+  
+  // In AI mode, undo both the AI's move and the player's move
+  // In PvP mode, undo just the last move
+  const stepsToUndo = mode === 'ai' ? 2 : 1;
+  
+  let snapshot = null;
+  for (let i = 0; i < stepsToUndo && moveHistory.length > 0; i++) {
+    snapshot = moveHistory.pop();
+  }
+  
+  if (snapshot) {
+    gameState = snapshot.state;
+    scores = snapshot.scores;
+    renderBoard();
+    renderStatus();
+    renderScores();
+    updateUndoButton();
+  }
+}
+
 function scheduleAIMove() {
   aiThinking = true;
+  updateUndoButton();
   thinkingEl.classList.add('visible');
   
   // [E9] Slight delay for perceived "thinking" — feels more natural
@@ -1090,6 +1167,7 @@ function scheduleAIMove() {
     if (move !== -1 && move !== undefined) {
       applyMove(move);
     }
+    updateUndoButton();
   }, delay);
 }
 
@@ -1112,16 +1190,20 @@ function handleGameOver() {
     bumpScore('draw');
   }
   
+  saveScores();  // Persist scores
   renderScores();
+  updateUndoButton();  // Disable undo on game over
 }
 
 function resetGame() {
   gameState = createState();
+  moveHistory = [];  // Clear undo history on new game
   buildBoard();
   renderBoard();
   renderStatus();
   thinkingEl.classList.remove('visible');
   aiThinking = false;
+  updateUndoButton();
 }
 
 // ─── 5. ANIMATIONS ─────────────────────────────────────────────
@@ -1166,6 +1248,7 @@ function spawnConfetti() {
 
 // Controls
 resetBtn.addEventListener('click', resetGame);
+undoBtn.addEventListener('click', undoMove);
 
 modeSelect.addEventListener('change', () => {
   // [E10] Progressive disclosure: hide difficulty in PvP
@@ -1185,10 +1268,12 @@ evidenceBtn.addEventListener('click', () => {
 });
 
 // Boot
+loadScores();
 buildBoard();
 renderBoard();
 renderStatus();
 renderScores();
+updateUndoButton();
 
 // ─── 7. SELF-TESTS (Console) ──────────────────────────────────
 // [Superpowers TDD verification: evidence that core logic is correct]
