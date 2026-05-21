@@ -27,6 +27,7 @@
   [E13] Von Restorff effect: winning line highlighted distinctly from other marks
   [E14] Weber-Fechner Law: animation easing follows natural perception curves
   [E15] Game theory: Nash equilibrium for TTT = draw with optimal play on both sides
+  [E16] Auditory icons: Gaver (1989) — synthetic sounds provide immediate, intuitive feedback
 */
 
 *, *::before, *::after {
@@ -187,6 +188,12 @@ h1 {
 .control-group button:disabled:hover {
   border-color: var(--border-color);
   background: var(--bg-primary);
+}
+
+/* Mute button active state */
+#mute-btn.muted {
+  border-color: var(--o-color);
+  color: var(--o-color);
 }
 
 /* ═══════════════════════════════════════
@@ -659,6 +666,9 @@ h1 {
       <input type="text" id="name-o" maxlength="12" placeholder="Player O" aria-label="Player O name">
     </div>
     <div class="control-group">
+      <button id="mute-btn" aria-label="Toggle sound">🔊</button>
+    </div>
+    <div class="control-group">
       <button id="undo-btn" aria-label="Undo last move" disabled>↩ Undo</button>
     </div>
     <div class="control-group">
@@ -701,7 +711,7 @@ h1 {
   <button class="reset-score-btn" id="reset-score-btn" aria-label="Reset all scores to zero">Reset Scores</button>
 
   <button class="evidence-toggle" id="evidence-btn" aria-expanded="false" aria-controls="evidence-panel">
-    📚 View Evidence Base (15 Citations)
+    📚 View Evidence Base (16 Citations)
   </button>
 
   <div class="evidence-panel" id="evidence-panel" role="region" aria-label="Research evidence">
@@ -768,6 +778,10 @@ h1 {
         <span class="citation-id">E15</span>
         <span><span class="citation-category">Game Theory</span> Nash, J.F. (1950). "Equilibrium Points in N-Person Games." — TTT Nash equilibrium is always a draw with perfect play; Impossible mode demonstrates this.</span>
       </div>
+      <div class="citation">
+        <span class="citation-id">E16</span>
+        <span><span class="citation-category">HCI / Sound</span> Gaver, W.W. (1989). "The SonicFinder: An Interface That Uses Auditory Icons." <em>Human-Computer Interaction, 4(1), 67–94.</em> — Synthetic auditory feedback improves task performance and user confidence.</span>
+      </div>
     </div>
   </div>
 </div>
@@ -783,6 +797,7 @@ h1 {
    3. UI renderer (DOM manipulation, accessibility) [E6]
    4. Event system (Fitts's Law compliant) [E3]
    5. Animation controller [E9][E14]
+   6. Sound engine (Web Audio API, auditory icons) [E16]
    ═══════════════════════════════════════════════════════════════ */
 
 // ─── 1. GAME STATE ─────────────────────────────────────────────
@@ -931,13 +946,132 @@ function getAIMove(board, difficulty, aiSym = O) {
   }
 }
 
-// ─── 3. UI RENDERER ────────────────────────────────────────────
+// ─── 3. SOUND ENGINE — [E16] Auditory Icons ────────────────────
+// Web Audio API — zero external files, instant playback
+
+const Sound = (() => {
+  let ctx = null;
+  let muted = false;
+
+  function getContext() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    return ctx;
+  }
+
+  function isMuted() {
+    return muted || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function playTone(freq, type, duration, volume = 0.15, delay = 0) {
+    if (isMuted()) return;
+    const ac = getContext();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ac.currentTime + delay);
+    gain.gain.setValueAtTime(volume, ac.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + delay + duration);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(ac.currentTime + delay);
+    osc.stop(ac.currentTime + delay + duration);
+  }
+
+  function playNoise(duration, volume = 0.08) {
+    if (isMuted()) return;
+    const ac = getContext();
+    const bufferSize = ac.sampleRate * duration;
+    const buffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const source = ac.createBufferSource();
+    source.buffer = buffer;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(volume, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
+    const filter = ac.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 3000;
+    filter.Q.value = 0.5;
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ac.destination);
+    source.start();
+  }
+
+  return {
+    // Place a piece — short percussive click [E9] <100ms
+    place() {
+      playTone(800, 'sine', 0.06, 0.12);
+      playNoise(0.04, 0.06);
+    },
+
+    // Win — ascending major chord arpeggio
+    win() {
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, i) => {
+        playTone(freq, 'sine', 0.3, 0.12, i * 0.1);
+      });
+      // Add a shimmer
+      playTone(1318.51, 'triangle', 0.5, 0.06, 0.35);
+    },
+
+    // Draw — neutral two-tone
+    draw() {
+      playTone(440, 'sine', 0.2, 0.1);
+      playTone(440, 'sine', 0.2, 0.1, 0.15);
+    },
+
+    // Invalid move attempt — soft buzz
+    invalid() {
+      playTone(200, 'square', 0.08, 0.06);
+    },
+
+    // Undo — descending tone
+    undo() {
+      playTone(600, 'sine', 0.1, 0.1);
+      playTone(400, 'sine', 0.15, 0.1, 0.08);
+    },
+
+    // Toggle mute state
+    toggleMute() {
+      muted = !muted;
+      try {
+        localStorage.setItem('ttt-muted', muted ? '1' : '0');
+      } catch (e) {}
+      return muted;
+    },
+
+    isMuted() {
+      return muted;
+    },
+
+    // Load saved mute preference
+    loadMutePref() {
+      try {
+        const stored = localStorage.getItem('ttt-muted');
+        if (stored === '1') muted = true;
+      } catch (e) {}
+      return muted;
+    }
+  };
+})();
+
+// ─── 4. UI RENDERER ────────────────────────────────────────────
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
 const thinkingEl = document.getElementById('thinking');
 const resetBtn = document.getElementById('reset-btn');
 const undoBtn = document.getElementById('undo-btn');
+const muteBtn = document.getElementById('mute-btn');
 const resetScoreBtn = document.getElementById('reset-score-btn');
 const modeSelect = document.getElementById('mode-select');
 const diffSelect = document.getElementById('diff-select');
@@ -1180,12 +1314,21 @@ function updateUndoButton() {
   undoBtn.disabled = !canUndo;
 }
 
-// ─── 4. EVENT SYSTEM ───────────────────────────────────────────
+function updateMuteButton() {
+  muteBtn.textContent = Sound.isMuted() ? '🔇' : '🔊';
+  muteBtn.classList.toggle('muted', Sound.isMuted());
+  muteBtn.setAttribute('aria-label', Sound.isMuted() ? 'Unmute sound' : 'Mute sound');
+}
+
+// ─── 5. EVENT SYSTEM ───────────────────────────────────────────
 
 function handleCellClick(index) {
   if (aiThinking) return;
   if (gameState.gameOver) return;
-  if (gameState.board[index] !== EMPTY) return;
+  if (gameState.board[index] !== EMPTY) {
+    Sound.invalid();
+    return;
+  }
   
   const mode = modeSelect.value;
   if (mode === 'ai' && gameState.currentPlayer !== humanPlayer) return;
@@ -1229,6 +1372,8 @@ function applyMove(index) {
   const newState = makeMove(gameState, index);
   if (!newState) return;
   
+  Sound.place(); // [E16] Auditory feedback
+  
   gameState = newState;
   renderBoard();
   renderStatus();
@@ -1251,6 +1396,7 @@ function undoMove() {
   }
   
   if (snapshot) {
+    Sound.undo(); // [E16] Descending tone for reversal
     gameState = snapshot.state;
     scores = snapshot.scores;
     renderBoard();
@@ -1287,6 +1433,8 @@ function handleGameOver() {
     scores[key]++;
     bumpScore(key);
     
+    Sound.win(); // [E16] Ascending chord
+    
     boardEl.classList.add('shake');
     setTimeout(() => boardEl.classList.remove('shake'), 400);
     
@@ -1297,6 +1445,7 @@ function handleGameOver() {
   } else if (gameState.isDraw) {
     scores.draw++;
     bumpScore('draw');
+    Sound.draw(); // [E16] Neutral two-tone
   }
   
   saveScores();
@@ -1321,7 +1470,7 @@ function resetGame() {
   }
 }
 
-// ─── 5. ANIMATIONS ─────────────────────────────────────────────
+// ─── 6. ANIMATIONS ─────────────────────────────────────────────
 
 function spawnConfetti() {
   const container = document.getElementById('confetti-container');
@@ -1359,10 +1508,16 @@ function spawnConfetti() {
   }
 }
 
-// ─── 6. INITIALIZATION ────────────────────────────────────────
+// ─── 7. INITIALIZATION ────────────────────────────────────────
 
 resetBtn.addEventListener('click', resetGame);
 undoBtn.addEventListener('click', undoMove);
+
+// Mute toggle
+muteBtn.addEventListener('click', () => {
+  Sound.toggleMute();
+  updateMuteButton();
+});
 
 // Reset scores with confirmation
 resetScoreBtn.addEventListener('click', () => {
@@ -1400,11 +1555,17 @@ evidenceBtn.addEventListener('click', () => {
   evidenceBtn.setAttribute('aria-expanded', isOpen);
   evidenceBtn.textContent = isOpen 
     ? '📚 Hide Evidence Base' 
-    : '📚 View Evidence Base (15 Citations)';
+    : '📚 View Evidence Base (16 Citations)';
+});
+
+// Respect system preference changes
+window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+  updateMuteButton();
 });
 
 // Boot
 loadScores();
+Sound.loadMutePref();
 updateFirstMove();
 buildBoard();
 renderBoard();
@@ -1412,8 +1573,9 @@ renderStatus();
 renderScores();
 updateScoreLabels();
 updateUndoButton();
+updateMuteButton();
 
-// ─── 7. SELF-TESTS (Console) ──────────────────────────────────
+// ─── 8. SELF-TESTS (Console) ──────────────────────────────────
 (function runSelfTests() {
   const tests = [];
   let passed = 0;

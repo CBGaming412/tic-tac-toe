@@ -9,7 +9,7 @@
   </a>
   <br><br>
   <img src="https://img.shields.io/badge/Self--Tests-12%2F12%20Passing-22c55e?style=flat-square" alt="Tests">
-  <img src="https://img.shields.io/badge/Research%20Citations-15-a855f7?style=flat-square" alt="Citations">
+  <img src="https://img.shields.io/badge/Research%20Citations-16-a855f7?style=flat-square" alt="Citations">
   <img src="https://img.shields.io/badge/WCAG-AA%20Compliant-3b82f6?style=flat-square" alt="WCAG">
   <img src="https://img.shields.io/badge/Dependencies-Zero-eab308?style=flat-square" alt="Dependencies">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
@@ -30,7 +30,7 @@ A Tic Tac Toe game where **every single design decision is backed by peer-review
 - [Why "Evidence-Based"?](#-why-evidence-based)
 - [Features](#-features)
 - [The AI Engine](#-the-ai-engine)
-- [Evidence Base — 15 Research Citations](#-evidence-base--15-research-citations)
+- [Evidence Base — 16 Research Citations](#-evidence-base--16-research-citations)
 - [Accessibility Compliance](#-accessibility-compliance)
 - [Self-Test Suite](#-self-test-suite)
 - [Architecture](#-architecture)
@@ -66,8 +66,9 @@ Most games make design choices by intuition or copying trends. This project take
 | "The AI should be smart" | Minimax algorithm — Shannon (1950), guaranteed optimal play **[E1]** |
 | "Show the score" | Miller's Law (1956): limit to 7±2 items — we show only 3 **[E4]** |
 | "Highlight the winner" | Von Restorff Effect (1933): isolated items are remembered better **[E13]** |
+| "Add sound effects" | Auditory icons provide immediate, intuitive feedback — Gaver (1989) **[E16]** |
 
-The game includes an in-app **"📚 View Evidence Base"** button that displays all 15 citations with their categories and applications.
+The game includes an in-app **"📚 View Evidence Base"** button that displays all 16 citations with their categories and applications.
 
 ---
 
@@ -81,6 +82,16 @@ The game includes an in-app **"📚 View Evidence Base"** button that displays a
 - **↩️ Undo Move** — Take back your last move (in AI mode, undoes both your move and the AI's response)
 - **🔄 Reset Scores** — Clear all scores with a confirmation prompt
 
+### Sound & Feedback
+- **🔊 Sound Effects** — Web Audio API-generated sounds (zero external files):
+  - **Place** — Short percussive click when placing a mark
+  - **Win** — Ascending major chord arpeggio (C-E-G-C) with shimmer
+  - **Draw** — Neutral two-tone
+  - **Invalid** — Soft buzz when tapping a taken cell
+  - **Undo** — Descending tone for reversal
+- **🔇 Mute Toggle** — Persists preference to `localStorage`
+- **♿ Reduced Motion** — Sound auto-disables when `prefers-reduced-motion` is active
+
 ### Design & UX
 - **🎨 Research-Driven UI** — Every color, size, spacing, and animation backed by evidence
 - **🎉 Celebration Effects** — Confetti burst on wins, pulsing win line, board shake
@@ -91,11 +102,11 @@ The game includes an in-app **"📚 View Evidence Base"** button that displays a
 ### Accessibility
 - **♿ WCAG 2.1 AA** — Verified contrast ratios, semantic HTML, ARIA labels
 - **⌨️ Full Keyboard Navigation** — Arrow keys to move, Enter/Space to place
-- **🔇 Reduced Motion** — Respects `prefers-reduced-motion` for vestibular disorders
+- **🔇 Reduced Motion** — Respects `prefers-reduced-motion` for vestibular disorders (also mutes sound)
 
 ### Quality
 - **🧪 12 Self-Tests** — Run automatically on every page load (check browser console)
-- **📚 15 Citations** — In-app evidence panel with categorized research references
+- **📚 16 Citations** — In-app evidence panel with categorized research references
 - **0️⃣ Zero Dependencies** — Single HTML file, no frameworks, no build step
 
 ---
@@ -161,13 +172,13 @@ This means the AI won't just win — it wins as fast as possible and delays loss
 Play against a friend on the same device with these extras:
 
 - **Custom Player Names** — Optional name fields for each player (e.g., "Alice" and "Bob")
-- **Personalized UI** — Names appear in the status bar ("Alice's turn") and scoreboard ("Alice (X) Wins")
+- **Personalized UI** — Names appear in the status bar ("Alice's turn") and scoreboard labels ("Alice (X) Wins")
 - **Ephemeral Names** — Names reset on page refresh or when switching to AI mode, keeping the scoreboard persistent
 - **Single-Step Undo** — Undo just the last move (both players' moves in AI mode)
 
 ---
 
-## 📚 Evidence Base — 15 Research Citations
+## 📚 Evidence Base — 16 Research Citations
 
 Every design decision traces to published research. Citations are categorized by domain and tagged with the specific UI element they informed.
 
@@ -186,6 +197,7 @@ Every design decision traces to published research. Citations are categorized by
 | **E3** | Fitts, P.M. "The Information Capacity of the Human Motor System in Controlling the Amplitude of Movement." *Journal of Experimental Psychology, 47(6), 381–391.* | 1954 | Cell size: 110px+ touch targets for fast, accurate tapping |
 | **E5** | Hick, W.E. "On the Rate of Gain of Information." *Quarterly Journal of Experimental Psychology, 4(1), 11–26.* | 1952 | Decision complexity: max 9 cells + clear turn indicator |
 | **E9** | Card, S.K., Moran, T.P. & Newell, A. "The Model Human Processor." *Handbook of Human-Computer Interaction.* | 1991 | Feedback timing: all responses < 100ms perceived as instant |
+| **E16** | Gaver, W.W. "The SonicFinder: An Interface That Uses Auditory Icons." *Human-Computer Interaction, 4(1), 67–94.* | 1989 | Synthetic auditory feedback improves task performance and user confidence |
 
 ### 🧠 Cognitive Psychology
 
@@ -240,7 +252,7 @@ This game meets **WCAG 2.1 Level AA** requirements **[E6]**, verified programmat
 
 - **ARIA labels** on all interactive elements (`role="grid"`, `role="gridcell"`, `aria-live="polite"`)
 - **Screen reader announcements** for turn changes, wins, and draws via `aria-live` regions
-- **`prefers-reduced-motion`** media query disables all animations for users with vestibular disorders
+- **`prefers-reduced-motion`** media query disables all animations and sound for users with vestibular disorders
 - **Focus indicators** — visible `:focus-visible` outlines on all interactive elements
 - **Semantic HTML** — proper `<button>`, `<select>`, `<label>` elements throughout
 
@@ -306,18 +318,19 @@ The game is a **single HTML file** with embedded CSS and JavaScript, structured 
 │  JS Layer                               │
 │  ├── 1. Game State (pure functions)     │
 │  ├── 2. AI Engine (minimax + α-β)       │
-│  ├── 3. UI Renderer (DOM + ARIA)        │
-│  ├── 4. Event System (click + keyboard) │
-│  ├── 5. Animation Controller            │
-│  ├── 6. Initialization                  │
-│  └── 7. Self-Test Suite                 │
+│  ├── 3. Sound Engine (Web Audio API)    │
+│  ├── 4. UI Renderer (DOM + ARIA)        │
+│  ├── 5. Event System (click + keyboard) │
+│  ├── 6. Animation Controller            │
+│  ├── 7. Initialization                  │
+│  └── 8. Self-Test Suite                 │
 ├─────────────────────────────────────────┤
 │  HTML Layer                             │
 │  ├── Game controls (mode, difficulty)   │
 │  ├── Status bar (dual-coded)            │
 │  ├── Board (ARIA grid)                  │
 │  ├── Scoreboard (3 cards)               │
-│  └── Evidence panel (15 citations)      │
+│  └── Evidence panel (16 citations)      │
 └─────────────────────────────────────────┘
 ```
 
@@ -328,6 +341,7 @@ The game is a **single HTML file** with embedded CSS and JavaScript, structured 
 | **Single file** | Zero deployment friction — `open file.html` and play |
 | **No framework** | Eliminates dependency risk, reduces payload to ~20KB |
 | **Inline SVG marks** | Crisp at any resolution, animatable, no image requests |
+| **Web Audio API sounds** | No external audio files; synthesized in real-time, zero bandwidth cost |
 | **Pure state functions** | Testable without DOM; enables the self-test suite |
 | **CSS custom properties** | Single source of truth for the design system |
 
