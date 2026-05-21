@@ -416,6 +416,29 @@ h1 {
 }
 
 /* ═══════════════════════════════════════
+   RESET SCORE BUTTON
+   ═══════════════════════════════════════ */
+.reset-score-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 0.3rem 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  margin-top: 0.25rem;
+}
+
+.reset-score-btn:hover {
+  border-color: var(--o-color);
+  color: var(--o-color);
+}
+
+/* ═══════════════════════════════════════
    EVIDENCE PANEL — Toggleable research citations
    ═══════════════════════════════════════ */
 .evidence-toggle {
@@ -675,6 +698,8 @@ h1 {
     </div>
   </div>
 
+  <button class="reset-score-btn" id="reset-score-btn" aria-label="Reset all scores to zero">Reset Scores</button>
+
   <button class="evidence-toggle" id="evidence-btn" aria-expanded="false" aria-controls="evidence-panel">
     📚 View Evidence Base (15 Citations)
   </button>
@@ -913,6 +938,7 @@ const statusEl = document.getElementById('status');
 const thinkingEl = document.getElementById('thinking');
 const resetBtn = document.getElementById('reset-btn');
 const undoBtn = document.getElementById('undo-btn');
+const resetScoreBtn = document.getElementById('reset-score-btn');
 const modeSelect = document.getElementById('mode-select');
 const diffSelect = document.getElementById('diff-select');
 const firstMoveSelect = document.getElementById('first-move-select');
@@ -1012,6 +1038,15 @@ function updateScoreLabels() {
     labelXEl.textContent = 'X Wins';
     labelOEl.textContent = 'O Wins';
   }
+}
+
+// ─── Reset scores ──────────────────────────────────────────────
+
+function resetScores() {
+  scores = { x: 0, o: 0, draw: 0 };
+  saveScores();
+  renderScores();
+  updateScoreLabels();
 }
 
 // ─── Board Building & Rendering ────────────────────────────────
@@ -1328,6 +1363,13 @@ function spawnConfetti() {
 
 resetBtn.addEventListener('click', resetGame);
 undoBtn.addEventListener('click', undoMove);
+
+// Reset scores with confirmation
+resetScoreBtn.addEventListener('click', () => {
+  if (confirm('Reset all scores to zero? This cannot be undone.')) {
+    resetScores();
+  }
+});
 
 modeSelect.addEventListener('change', () => {
   const isAI = modeSelect.value === 'ai';
