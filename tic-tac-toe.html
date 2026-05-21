@@ -141,7 +141,7 @@ h1 {
   white-space: nowrap;
 }
 
-.control-group select, .control-group button {
+.control-group select, .control-group button, .control-group input[type="text"] {
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
@@ -151,6 +151,22 @@ h1 {
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: inherit;
+}
+
+.control-group input[type="text"] {
+  width: 7rem;
+  cursor: text;
+  outline: none;
+}
+
+.control-group input[type="text"]::placeholder {
+  color: var(--text-muted);
+}
+
+.control-group input[type="text"]:focus {
+  border-color: var(--x-color);
+  outline: 2px solid var(--x-color);
+  outline-offset: 1px;
 }
 
 .control-group select:hover, .control-group button:hover {
@@ -614,6 +630,11 @@ h1 {
         <option value="ai">AI (X)</option>
       </select>
     </div>
+    <div class="control-group" id="names-group" style="display:none;">
+      <label>Names</label>
+      <input type="text" id="name-x" maxlength="12" placeholder="Player X" aria-label="Player X name">
+      <input type="text" id="name-o" maxlength="12" placeholder="Player O" aria-label="Player O name">
+    </div>
     <div class="control-group">
       <button id="undo-btn" aria-label="Undo last move" disabled>↩ Undo</button>
     </div>
@@ -641,7 +662,7 @@ h1 {
   <!-- [E4] Miller's Law: only 3 data points -->
   <div class="scoreboard" aria-label="Game scores">
     <div class="score-card x-card">
-      <div class="score-label">X Wins</div>
+      <div class="score-label" id="label-x">X Wins</div>
       <div class="score-value" id="score-x">0</div>
     </div>
     <div class="score-card draw-card">
@@ -649,7 +670,7 @@ h1 {
       <div class="score-value" id="score-draw">0</div>
     </div>
     <div class="score-card o-card">
-      <div class="score-label">O Wins</div>
+      <div class="score-label" id="label-o">O Wins</div>
       <div class="score-value" id="score-o">0</div>
     </div>
   </div>
@@ -895,8 +916,13 @@ const undoBtn = document.getElementById('undo-btn');
 const modeSelect = document.getElementById('mode-select');
 const diffSelect = document.getElementById('diff-select');
 const firstMoveSelect = document.getElementById('first-move-select');
+const nameXInput = document.getElementById('name-x');
+const nameOInput = document.getElementById('name-o');
 const diffGroup = document.getElementById('difficulty-group');
 const firstMoveGroup = document.getElementById('first-move-group');
+const namesGroup = document.getElementById('names-group');
+const labelXEl = document.getElementById('label-x');
+const labelOEl = document.getElementById('label-o');
 const evidenceBtn = document.getElementById('evidence-btn');
 const evidencePanel = document.getElementById('evidence-panel');
 const scoreEls = {
@@ -911,6 +937,9 @@ let aiThinking = false;
 let moveHistory = [];  // Stack for undo — stores { state, scores } snapshots
 let humanPlayer = X;   // Symbol assigned to the human
 let aiPlayer = O;      // Symbol assigned to the AI
+
+// Ephemeral player names (reset on refresh or mode switch)
+let playerNames = { x: '', o: '' };
 
 // ─── Score Persistence via localStorage ────────────────────────
 
@@ -945,6 +974,43 @@ function updateFirstMove() {
   } else {
     humanPlayer = O;
     aiPlayer = X;
+  }
+}
+
+// ─── Player names ──────────────────────────────────────────────
+
+function getPlayerName(symbol) {
+  // In PvP mode, use entered names; fall back to symbol
+  const mode = modeSelect.value;
+  if (mode === 'pvp') {
+    const name = symbol === X ? playerNames.x : playerNames.o;
+    if (name && name.trim()) return name.trim();
+  }
+  return symbol;
+}
+
+function clearPlayerNames() {
+  playerNames = { x: '', o: '' };
+  nameXInput.value = '';
+  nameOInput.value = '';
+}
+
+function readPlayerNames() {
+  playerNames.x = nameXInput.value;
+  playerNames.o = nameOInput.value;
+  updateScoreLabels();
+}
+
+function updateScoreLabels() {
+  const mode = modeSelect.value;
+  if (mode === 'pvp') {
+    const xName = playerNames.x.trim() || X;
+    const oName = playerNames.o.trim() || O;
+    labelXEl.textContent = `${xName} (${X}) Wins`;
+    labelOEl.textContent = `${oName} (${O}) Wins`;
+  } else {
+    labelXEl.textContent = 'X Wins';
+    labelOEl.textContent = 'O Wins';
   }
 }
 
@@ -1029,25 +1095,27 @@ function renderStatus() {
     if (mode === 'ai') {
       winText = gameState.winner === humanPlayer ? 'You win! 🎉' : 'AI wins!';
     } else {
-      winText = `${gameState.winner} wins! 🎉`;
+      const name = getPlayerName(gameState.winner);
+      winText = `${name} wins! 🎉`;
     }
     statusEl.innerHTML = winIcon + winText;
   } else if (gameState.isDraw) {
     statusEl.classList.add('draw');
     statusEl.innerHTML = '🤝 Draw!';
   } else {
-    const isHumanTurn = gameState.currentPlayer === humanPlayer;
     const isXTurn = gameState.currentPlayer === X;
     statusEl.classList.add(isXTurn ? 'x-turn' : 'o-turn');
     const mode = modeSelect.value;
     const icon = isXTurn ? createXSvgInline('#3b82f6') : createOSvgInline('#ef4444');
     
     if (mode === 'ai') {
+      const isHumanTurn = gameState.currentPlayer === humanPlayer;
       statusEl.innerHTML = isHumanTurn 
         ? icon + 'Your turn' 
         : icon + "AI's turn";
     } else {
-      statusEl.innerHTML = icon + `${gameState.currentPlayer}'s turn`;
+      const name = getPlayerName(gameState.currentPlayer);
+      statusEl.innerHTML = icon + `${name}'s turn`;
     }
   }
 }
@@ -1198,6 +1266,7 @@ function handleGameOver() {
   
   saveScores();
   renderScores();
+  updateScoreLabels();
   updateUndoButton();
 }
 
@@ -1264,6 +1333,9 @@ modeSelect.addEventListener('change', () => {
   const isAI = modeSelect.value === 'ai';
   diffGroup.style.display = isAI ? '' : 'none';
   firstMoveGroup.style.display = isAI ? '' : 'none';
+  namesGroup.style.display = isAI ? 'none' : '';
+  clearPlayerNames();
+  updateScoreLabels();
   updateFirstMove();
   resetGame();
 });
@@ -1276,6 +1348,10 @@ firstMoveSelect.addEventListener('change', () => {
   updateFirstMove();
   resetGame();
 });
+
+// Name inputs — live update scoreboard labels
+nameXInput.addEventListener('input', readPlayerNames);
+nameOInput.addEventListener('input', readPlayerNames);
 
 evidenceBtn.addEventListener('click', () => {
   const isOpen = evidencePanel.classList.toggle('open');
@@ -1292,6 +1368,7 @@ buildBoard();
 renderBoard();
 renderStatus();
 renderScores();
+updateScoreLabels();
 updateUndoButton();
 
 // ─── 7. SELF-TESTS (Console) ──────────────────────────────────
